@@ -76,25 +76,27 @@ wss.on("connection", (ws) => {
             // USERNAME CHANGE
             // =========================
             if (parsed.type === "username_change") {
-                const newMessage = new Message({
-                    username: parsed.username,
-                    message: parsed.message,
-                    channel: parsed.channel
-                });
+    const sysMessage = new Message({
+        username: parsed.username,   // you can also put "System" here if you want
+        message: parsed.message,
+        channel: parsed.channel,
+        type: "username_change"
+    });
 
-                await newMessage.save();
+    await sysMessage.save(); // <-- saves in MongoDB
 
-                wss.clients.forEach(client => {
-                    if (client.readyState === WebSocket.OPEN) {
-                        client.send(JSON.stringify({
-                            type: "username_change",
-                            username: parsed.username,
-                            message: parsed.message,
-                            channel: parsed.channel
-                        }));
-                    }
-                });
-            }
+    // Broadcast to everyone
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({
+                type: "username_change",
+                username: parsed.username,
+                message: parsed.message,
+                channel: parsed.channel
+            }));
+        }
+    });
+}
 
         } catch (err) {
             console.error("WebSocket error:", err);
