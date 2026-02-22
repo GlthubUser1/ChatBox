@@ -27,40 +27,79 @@ const messageSchema = new mongoose.Schema({
 
 const Message = mongoose.model("Message", messageSchema);
 
-// ===== WebSocket Logic =====
-wss.on("connection", async (ws) => {
-  console.log("User connected");
+wss.on("connection", (ws) => {
+    console.log("User connected");
 
-  // Load last 50 messages
-  const messages = await Message.find({})
-    .sort({ createdAt: -1 })
-    .limit(50);
+    ws.on("message", async (data) => {
+        try {
+            const parsed = JSON.parse(data);
 
-  ws.send(JSON.stringify({ type: "history", messages: messages.reverse() }));
+            // =========================
+            // LOAD HISTORY (per channel)
+            // =========================
+            if (parsed.type === "get_history") {
+                const messages = await Message.find({ channel: parsed.channel })
+                    .sort({ createdAt: 1 })
+                    .limit(50);
 
-  ws.on("message", async (data) => {
-    const parsed = JSON.parse(data);
+                ws.send(JSON.stringify({
+                    type: "history",
+                    messages
+                }));
+            }
 
-    if (parsed.type === "message" || parsed.type === "username_change") {
-      const newMsg = new Message({
-        username: parsed.username || parsed.oldUsername,
-        message: parsed.message,
-        channel: parsed.channel || "#general",
-        type: parsed.type
-      });
+            // =========================
+            // SEND NEW MESSAGE
+            // =========================
+            if (parsed.type === "message") {
+                const newMessage = new Message({
+                    username: parsed.username,
+                    message: parsed.message,
+                    channel: parsed.channel
+                });
 
-      await newMsg.save();
+                await newMessage.save();
 
-      // Broadcast to all clients
-      wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify(newMsg));
+                wss.clients.forEach(client => {
+                    if (client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({
+                            type: "message",
+                            username: parsed.username,
+                            message: parsed.message,
+                            channel: parsed.channel
+                        }));
+                    }
+                });
+            }
+
+            // =========================
+            // USERNAME CHANGE
+            // =========================
+            if (parsed.type === "username_change") {
+                const newMessage = new Message({
+                    username: parsed.username,
+                    message: parsed.message,
+                    channel: parsed.channel
+                });
+
+                await newMessage.save();
+
+                wss.clients.forEach(client => {
+                    if (client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({
+                            type: "username_change",
+                            username: parsed.username,
+                            message: parsed.message,
+                            channel: parsed.channel
+                        }));
+                    }
+                });
+            }
+
+        } catch (err) {
+            console.error("WebSocket error:", err);
         }
-      });
-    }
-  });
-
-  ws.on("close", () => console.log("User disconnected"));
+    });
 });
 
 // ===== Basic Test Route =====
