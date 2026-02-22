@@ -12,12 +12,9 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 // ===== MongoDB Connection =====
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
-.then(() => console.log("MongoDB Connected"))
-.catch(err => console.error("MongoDB Connection Error:", err));
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB Connected"))
+  .catch(err => console.error("MongoDB Connection Error:", err));
 
 // ===== Message Schema =====
 const messageSchema = new mongoose.Schema({
@@ -34,7 +31,7 @@ const Message = mongoose.model("Message", messageSchema);
 wss.on("connection", async (ws) => {
   console.log("User connected");
 
-  // Load last 50 messages from MongoDB
+  // Load last 50 messages
   const messages = await Message.find({})
     .sort({ createdAt: -1 })
     .limit(50);
