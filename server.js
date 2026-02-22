@@ -34,24 +34,15 @@ const Message = mongoose.model("Message", messageSchema);
 wss.on("connection", async (ws) => {
   console.log("User connected");
 
-  // Send last 50 messages
-  try {
-    const messages = await Message.find({})
-      .sort({ createdAt: -1 })
-      .limit(50);
-    ws.send(JSON.stringify({ type: "history", messages: messages.reverse() }));
-  } catch (err) {
-    console.error("Failed to load message history:", err);
-  }
+  // Load last 50 messages from MongoDB
+  const messages = await Message.find({})
+    .sort({ createdAt: -1 })
+    .limit(50);
+
+  ws.send(JSON.stringify({ type: "history", messages: messages.reverse() }));
 
   ws.on("message", async (data) => {
-    let parsed;
-    try {
-      parsed = JSON.parse(data);
-    } catch (err) {
-      console.error("Invalid JSON:", err);
-      return;
-    }
+    const parsed = JSON.parse(data);
 
     if (parsed.type === "message" || parsed.type === "username_change") {
       const newMsg = new Message({
@@ -61,12 +52,7 @@ wss.on("connection", async (ws) => {
         type: parsed.type
       });
 
-      try {
-        await newMsg.save();
-      } catch (err) {
-        console.error("Failed to save message:", err);
-        return;
-      }
+      await newMsg.save();
 
       // Broadcast to all clients
       wss.clients.forEach(client => {
