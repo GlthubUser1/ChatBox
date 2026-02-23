@@ -44,6 +44,7 @@ wss.on("connection", (ws) => {
 
                 ws.send(JSON.stringify({
                     type: "history",
+                    channel: parsed.channel,    // <-- fixed: include channel
                     messages
                 }));
             }
@@ -66,7 +67,8 @@ wss.on("connection", (ws) => {
                             type: "message",
                             username: parsed.username,
                             message: parsed.message,
-                            channel: parsed.channel
+                            channel: parsed.channel,
+                            id: newMessage._id       // <-- add id for deduplication
                         }));
                     }
                 });
@@ -76,27 +78,27 @@ wss.on("connection", (ws) => {
             // USERNAME CHANGE
             // =========================
             if (parsed.type === "username_change") {
-    const sysMessage = new Message({
-        username: parsed.username,   // you can also put "System" here if you want
-        message: parsed.message,
-        channel: parsed.channel,
-        type: "username_change"
-    });
+                const sysMessage = new Message({
+                    username: parsed.username,
+                    message: parsed.message,
+                    channel: parsed.channel,
+                    type: "username_change"
+                });
 
-    await sysMessage.save(); // <-- saves in MongoDB
+                await sysMessage.save();
 
-    // Broadcast to everyone
-    wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({
-                type: "username_change",
-                username: parsed.username,
-                message: parsed.message,
-                channel: parsed.channel
-            }));
-        }
-    });
-}
+                wss.clients.forEach(client => {
+                    if (client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({
+                            type: "username_change",
+                            username: parsed.username,
+                            message: parsed.message,
+                            channel: parsed.channel,
+                            id: sysMessage._id
+                        }));
+                    }
+                });
+            }
 
         } catch (err) {
             console.error("WebSocket error:", err);
