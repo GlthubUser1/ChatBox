@@ -81,17 +81,24 @@ console.log("User connected IP:", ip);
             // =========================
             // HISTORY
             // =========================
-            if (parsed.type === "get_history") {
-                const messages = await Message.find({ channel: parsed.channel })
-                    .sort({ createdAt: 1 })
-                    .limit(50);
+         if (parsed.type === "get_history") {
+    const messages = await Message.find({ channel: parsed.channel })
+        .sort({ createdAt: 1 })
+        .limit(50);
 
-                ws.send(JSON.stringify({
-                    type: "history",
-                    channel: parsed.channel,
-                    messages
-                }));
-            }
+    ws.send(JSON.stringify({
+        type: "history",
+        channel: parsed.channel,
+        messages: messages.map(m => ({
+            username: m.username,
+            message: m.message,
+            channel: m.channel,
+            type: m.type,
+            createdAt: m.createdAt
+            // 🚫 ip is NOT included
+        }))
+    }));
+}
 
             // =========================
             // MESSAGE
