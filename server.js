@@ -10,7 +10,7 @@ app.use(cors());
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// 🔐 SIMPLE PASSWORD (HERE)
+// 🔐 PASSWORD (put it here)
 const WS_PASSWORD = "2018Linc!";
 
 // ===== MongoDB =====
@@ -39,9 +39,9 @@ wss.on("connection", (ws) => {
         try {
             const parsed = JSON.parse(data);
 
-            // =====================
+            // =========================
             // AUTH
-            // =====================
+            // =========================
             if (parsed.type === "auth") {
                 if (parsed.password === WS_PASSWORD) {
                     ws.isAuthed = true;
@@ -58,18 +58,18 @@ wss.on("connection", (ws) => {
                 return;
             }
 
-            // =====================
+            // =========================
             // BLOCK UNAUTH USERS
-            // =====================
+            // =========================
             if (!ws.isAuthed) {
                 ws.send(JSON.stringify({ type: "auth_failed" }));
                 ws.close();
                 return;
             }
 
-            // =====================
+            // =========================
             // HISTORY
-            // =====================
+            // =========================
             if (parsed.type === "get_history") {
                 const messages = await Message.find({ channel: parsed.channel })
                     .sort({ createdAt: 1 })
@@ -82,9 +82,9 @@ wss.on("connection", (ws) => {
                 }));
             }
 
-            // =====================
+            // =========================
             // MESSAGE
-            // =====================
+            // =========================
             if (parsed.type === "message") {
                 const newMessage = new Message({
                     username: parsed.username,
@@ -107,9 +107,9 @@ wss.on("connection", (ws) => {
                 });
             }
 
-            // =====================
+            // =========================
             // USERNAME CHANGE
-            // =====================
+            // =========================
             if (parsed.type === "username_change") {
                 const sysMessage = new Message({
                     username: parsed.username,
@@ -139,7 +139,7 @@ wss.on("connection", (ws) => {
     });
 });
 
-// ===== Test Route =====
+// ===== Route =====
 app.get("/", (req, res) => {
     res.send("WebSocket Chat Server Running");
 });
