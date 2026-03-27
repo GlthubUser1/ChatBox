@@ -30,103 +30,108 @@ const Message = mongoose.model("Message", messageSchema);
 wss.on("connection", (ws) => {
     console.log("User connected");
 
-    ws.on("message", async (data) => {
-        try {
-          if (parsed.type === "auth") {
-    if (parsed.password === process.env.WS_PASSWORD) {
-        ws.isAuthed = true;
+   ws.on("message", async (data) => {
+    try {
+        const parsed = JSON.parse(data);
 
-        ws.send(JSON.stringify({
-            type: "auth_success"
-        }));
-    } else {
-        ws.send(JSON.stringify({
-            type: "auth_failed"
-        }));
-        ws.close();
-    }
-    return;
-}
-
-          if (!ws.isAuthed) {
-    ws.send(JSON.stringify({ type: "auth_failed" }));
-    ws.close();
-    return;
-}
-            const parsed = JSON.parse(data);
-
-            // =========================
-            // LOAD HISTORY (per channel)
-            // =========================
-            if (parsed.type === "get_history") {
-                const messages = await Message.find({ channel: parsed.channel })
-                    .sort({ createdAt: 1 })
-                    .limit(50);
+        // =========================
+        // AUTH (MUST COME FIRST)
+        // =========================
+        if (parsed.type === "auth") {
+            if (parsed.password === process.env.WS_PASSWORD) {
+                ws.isAuthed = true;
 
                 ws.send(JSON.stringify({
-                    type: "history",
-                    channel: parsed.channel,    // <-- fixed: include channel
-                    messages
+                    type: "auth_success"
                 }));
+            } else {
+                ws.send(JSON.stringify({
+                    type: "auth_failed"
+                }));
+                ws.close();
             }
-
-            // =========================
-            // SEND NEW MESSAGE
-            // =========================
-            if (parsed.type === "message") {
-                const newMessage = new Message({
-                    username: parsed.username,
-                    message: parsed.message,
-                    channel: parsed.channel
-                });
-
-                await newMessage.save();
-
-                wss.clients.forEach(client => {
-                    if (client.readyState === WebSocket.OPEN) {
-                        client.send(JSON.stringify({
-                            type: "message",
-                            username: parsed.username,
-                            message: parsed.message,
-                            channel: parsed.channel,
-                            id: newMessage._id       // <-- add id for deduplication
-                        }));
-                    }
-                });
-            }
-
-            // =========================
-            // USERNAME CHANGE
-            // =========================
-            if (parsed.type === "username_change") {
-                const sysMessage = new Message({
-                    username: parsed.username,
-                    message: parsed.message,
-                    channel: parsed.channel,
-                    type: "username_change"
-                });
-
-                await sysMessage.save();
-
-                wss.clients.forEach(client => {
-                    if (client.readyState === WebSocket.OPEN) {
-                        client.send(JSON.stringify({
-                            type: "username_change",
-                            username: parsed.username,
-                            message: parsed.message,
-                            channel: parsed.channel,
-                            id: sysMessage._id
-                        }));
-                    }
-                });
-            }
-
-        } catch (err) {
-            console.error("WebSocket error:", err);
+            return;
         }
-    });
-});
 
+        // =========================
+        // BLOCK UNAUTHENTICATED USERS
+        // =========================
+        if (!ws.isAuthed) {
+            ws.send(JSON.stringify({ type: "auth_failed" }));
+            ws.close();
+            return;
+        }
+
+        // =========================
+        // LOAD HISTORY
+        // =========================
+        if (parsed.type === "get_history") {
+            const messages = await Message.find({ channel: parsed.channel })
+                .sort({ createdAt: 1 })
+                .limit(50);
+
+            ws.send(JSON.stringify({
+                type: "history",
+                channel: parsed.channel,
+                messages
+            }));
+        }
+
+        // =========================
+        // SEND MESSAGE
+        // =========================
+        if (parsed.type === "message") {
+            const newMessage = new Message({
+                username: parsed.username,
+                message: parsed.message,
+                channel: parsed.channel
+            });
+
+            await newMessage.save();
+
+            wss.clients.forEach(client => {
+                if (client.readyState === WebSocket.OPEN && client.isAuthed) {
+                    client.send(JSON.stringify({
+                        type: "message",
+                        username: parsed.username,
+                        message: parsed.message,
+                        channel: parsed.channel,
+                        id: newMessage._id
+                    }));
+                }
+            });
+        }
+
+        // =========================
+        // USERNAME CHANGE
+        // =========================
+        if (parsed.type === "username_change") {
+            const sysMessage = new Message({
+                username: parsed.username,
+                message: parsed.message,
+                channel: parsed.channel,
+                type: "username_change"
+            });
+
+            await sysMessage.save();
+
+            wss.clients.forEach(client => {
+                if (client.readyState === WebSocket.OPEN && client.isAuthed) {
+                    client.send(JSON.stringify({
+                        type: "username_change",
+                        username: parsed.username,
+                        message: parsed.message,
+                        channel: parsed.channel,
+                        id: sysMessage._id
+                    }));
+                }
+            });
+        }
+
+    } catch (err) {
+        console.error("WebSocket error:", err);
+    }
+});
 // ===== Basic Test Route =====
 app.get("/", (req, res) => {
   res.send("WebSocket Chat Server Running");
