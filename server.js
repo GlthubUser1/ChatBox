@@ -19,6 +19,17 @@ mongoose.connect(process.env.MONGO_URI)
   .catch(err => console.error("MongoDB Connection Error:", err));
 
 // ===== Schema =====
+function safeMessage(m) {
+    return {
+        id: m._id,
+        username: m.username,
+        message: m.message,
+        channel: m.channel,
+        type: m.type,
+        createdAt: m.createdAt
+    };
+}
+
 const messageSchema = new mongoose.Schema({
   username: String,
   message: String,
@@ -89,6 +100,12 @@ console.log("User connected IP:", ip);
     ws.send(JSON.stringify({
         type: "history",
         channel: parsed.channel,
+        messages: messages.map(safeMessage)
+    }));
+}
+    ws.send(JSON.stringify({
+        type: "history",
+        channel: parsed.channel,
         messages: messages.map(m => ({
             username: m.username,
             message: m.message,
@@ -103,62 +120,48 @@ console.log("User connected IP:", ip);
             // MESSAGE
             // =========================
             if (parsed.type === "message") {
-                const newMessage = new Message({
-                    username: parsed.username,
-                    message: parsed.message,
-                    channel: parsed.channel,
-                  ip: ws.ip
-                });
+    const newMessage = new Message({
+        username: parsed.username,
+        message: parsed.message,
+        channel: parsed.channel,
+        ip: ws.ip
+    });
 
-                await newMessage.save();
+    await newMessage.save();
 
-            console.log("Saved message with IP:", newMessage.ip);
+    console.log("Saved message from IP:", ws.ip);
 
-                wss.clients.forEach(client => {
-                    if (client.readyState === WebSocket.OPEN && client.isAuthed) {
-                        client.send(JSON.stringify({
-                            type: "message",
-                            username: parsed.username,
-                            message: parsed.message,
-                            channel: parsed.channel,
-                            id: newMessage._id
-                        }));
-                    }
-                });
-            }
-
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN && client.isAuthed) {
+            client.send(JSON.stringify({
+                type: "message",
+                ...safeMessage(newMessage)
+            }));
+        }
+    });
+}
             // =========================
             // USERNAME CHANGE
             // =========================
             if (parsed.type === "username_change") {
-                const sysMessage = new Message({
-                    username: parsed.username,
-                    message: parsed.message,
-                    channel: parsed.channel,
-                    type: "username_change"
-                });
+    const sysMessage = new Message({
+        username: parsed.username,
+        message: parsed.message,
+        channel: parsed.channel,
+        type: "username_change"
+    });
 
-                await sysMessage.save();
+    await sysMessage.save();
 
-                wss.clients.forEach(client => {
-                    if (client.readyState === WebSocket.OPEN && client.isAuthed) {
-                        client.send(JSON.stringify({
-                            type: "username_change",
-                            username: parsed.username,
-                            message: parsed.message,
-                            channel: parsed.channel,
-                            id: sysMessage._id
-                        }));
-                    }
-                });
-            }
-
-        } catch (err) {
-            console.error("WebSocket error:", err);
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN && client.isAuthed) {
+            client.send(JSON.stringify({
+                type: "username_change",
+                ...safeMessage(sysMessage)
+            }));
         }
     });
-});
-
+}
 // ===== Route =====
 app.get("/", (req, res) => {
     res.send("WebSocket Chat Server Running");
