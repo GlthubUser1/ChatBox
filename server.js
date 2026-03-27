@@ -10,7 +10,7 @@ app.use(cors());
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// 🔐 PASSWORD (put it here)
+// yes
 const WS_PASSWORD = "2018Linc!";
 
 // ===== MongoDB =====
@@ -36,15 +36,15 @@ wss.on("connection", (ws, req) => {
 
     ws.isAuthed = false;
 
-const ip = 
-  (req.headers["x-forwarded-for"} &&
-      req.headers["x-forwarded-for"].split(",")[0]) ||
+const ip =
+  (req.headers["x-forwarded-for"] &&
+    req.headers["x-forwarded-for"].split(",")[0]) ||
   req.socket.remoteAddress ||
   "unknown";
 
-  ws.ip = ip;
+ws.ip = ip;
 
-  console.log("User connected IP:", ip);
+console.log("User connected IP:", ip);
   
     ws.on("message", async (data) => {
         try {
