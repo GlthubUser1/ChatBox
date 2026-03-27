@@ -95,11 +95,10 @@ console.log("User connected IP:", ip);
             channel: m.channel,
             type: m.type,
             createdAt: m.createdAt
-            // 🚫 ip is NOT included
+            // 🚫 ip removed
         }))
     }));
 }
-
             // =========================
             // MESSAGE
             // =========================
