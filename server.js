@@ -3,7 +3,7 @@ const http = require("http");
 const WebSocket = require("ws");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 
 require("dotenv").config();
 
