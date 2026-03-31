@@ -14,16 +14,6 @@ require("dotenv").config();
 
 // password system
 
-const PASSWORD = process.env.ADMIN_PASSWORD;
-
-app.post("/login", (req, res) => {
-  if (req.body.password === PASSWORD) {
-    res.send("ok");
-  } else {
-    res.send("nope");
-  }
-});
-
 const bcrypt = require("bcrypt");
 
 const hash = process.env.ADMIN_PASSWORD_HASH;
@@ -31,7 +21,6 @@ const hash = process.env.ADMIN_PASSWORD_HASH;
 if (await bcrypt.compare(req.body.password, hash)) {
   res.send("ok");
 }
-
 // ===== MongoDB =====
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
