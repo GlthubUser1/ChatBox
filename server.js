@@ -59,6 +59,25 @@ function safeMessage(m) {
   };
 }
 
+function broadcastOnlineUsers() {
+  const users = [];
+
+  wss.clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN && client.isAuthed && client.username) {
+      users.push(client.username);
+    }
+  });
+
+  wss.clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN && client.isAuthed) {
+      client.send(JSON.stringify({
+        type: "online_users",
+        users
+      }));
+    }
+  });
+}
+
 // ===== LOGIN ROUTE =====
 app.post("/login", async (req, res) => {
   try {
@@ -138,6 +157,19 @@ wss.on("connection", (ws, req) => {
         ws.username = username;
         ws.isAuthed = true;
 
+// 🔥 system join message
+wss.clients.forEach(client => {
+  if (client.readyState === WebSocket.OPEN && client.isAuthed) {
+    client.send(JSON.stringify({
+      type: "system",
+      message: `${username} joined the chat`,
+      channel: "general"
+    }));
+  }
+});
+
+broadcastOnlineUsers();
+        
         ws.send(JSON.stringify({ type: "auth_success" }));
         return;
       }
@@ -248,15 +280,27 @@ wss.on("connection", (ws, req) => {
 
   // ===== DISCONNECT =====
   ws.on("close", async () => {
-    if (ws.username) {
-      await User.updateOne(
-        { username: ws.username },
-        { online: false, lastSeen: new Date() }
-      );
+  if (ws.username) {
+    await User.updateOne(
+      { username: ws.username },
+      { online: false, lastSeen: new Date() }
+    );
 
-      console.log(`User disconnected: ${ws.username}`);
-    }
-  });
+    // 🔥 leave message
+    wss.clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN && client.isAuthed) {
+        client.send(JSON.stringify({
+          type: "system",
+          message: `${ws.username} left the chat`,
+          channel: "general"
+        }));
+      }
+    });
+
+    broadcastOnlineUsers();
+
+    console.log(`User disconnected: ${ws.username}`);
+  }
 });
 
 // ===== ROUTE =====
