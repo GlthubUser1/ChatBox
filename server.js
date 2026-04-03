@@ -151,11 +151,9 @@ wss.on("connection", (ws, req) => {
     }
 
     // ================= BLOCK UNAUTH =================
-    if (!ws.isAuthed) {
-      ws.send(JSON.stringify({ type: "auth_failed" }));
-      ws.close();
-      return;
-    }
+if (!ws.isAuthed) {
+  return; // silently ignore instead of killing connection
+}
 
     // ================= HISTORY =================
     if (data.type === "get_history") {
