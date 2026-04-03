@@ -18,14 +18,18 @@ const ADMIN_HASH = process.env.ADMIN_PASSWORD_HASH;
 if (!ADMIN_HASH) console.error("❌ ADMIN_PASSWORD_HASH missing!");
 
 // ===== MODELS =====
-const Message = mongoose.model("Message", new mongoose.Schema({
+const MessageSchema = new mongoose.Schema({
   username: String,
   message: String,
   channel: String,
   ip: String,
   type: { type: String, default: "message" },
   createdAt: { type: Date, default: Date.now }
-}));
+});
+
+MessageSchema.index({ channel: 1, createdAt: 1 }); // 🔥 performance boost
+
+const Message = mongoose.model("Message", MessageSchema);
 
 const User = mongoose.model("User", new mongoose.Schema({
   username: { type: String, unique: true },
@@ -81,6 +85,7 @@ function broadcastOnline() {
 wss.on("connection", (ws, req) => {
   ws.isAuthed = false;
   ws.username = null;
+  ws.lastDM = 0; // 🔥 anti spam
 
   const ip =
     req.headers["x-forwarded-for"]?.split(",")[0] ||
@@ -107,6 +112,9 @@ wss.on("connection", (ws, req) => {
         const username = (data.username || "").trim();
         if (!username) return;
 
+        const existingUser = await User.findOne({ username });
+        const wasOnline = existingUser?.online;
+
         ws.username = username;
         ws.isAuthed = true;
 
@@ -118,7 +126,11 @@ wss.on("connection", (ws, req) => {
 
         ws.send(JSON.stringify({ type: "auth_success" }));
 
-        broadcastSystem(`${username} joined the chat`);
+        // ✅ only broadcast if actually joining
+        if (!wasOnline) {
+          broadcastSystem(`${username} joined the chat`);
+        }
+
         broadcastOnline();
 
       } catch (err) {
@@ -128,7 +140,6 @@ wss.on("connection", (ws, req) => {
       return;
     }
 
-    // 🚫 don't kill connection, just ignore until authed
     if (!ws.isAuthed) return;
 
     // ===== HISTORY =====
@@ -152,9 +163,14 @@ wss.on("connection", (ws, req) => {
     if (data.type === "message") {
       const channel = data.channel || "general1";
 
+      const text = (data.message || "").trim();
+
+      // 🔥 validation
+      if (!text || text.length > 500) return;
+
       const msg = await Message.create({
         username: ws.username,
-        message: data.message,
+        message: text,
         channel,
         ip: ws.ip
       });
@@ -171,15 +187,15 @@ wss.on("connection", (ws, req) => {
       if (!newName || newName === oldName) return;
 
       const exists = await User.findOne({ username: newName });
-      if (exists && exists.online) {
+
+      // 🔥 race-safe check
+      if (exists && exists.online && exists.username !== oldName) {
         ws.send(JSON.stringify({ type: "username_taken" }));
         return;
       }
 
-      // mark old offline
       await User.updateOne({ username: oldName }, { online: false });
 
-      // mark new online
       await User.updateOne(
         { username: newName },
         { username: newName, online: true, lastSeen: new Date() },
@@ -188,23 +204,28 @@ wss.on("connection", (ws, req) => {
 
       ws.username = newName;
 
-      // ✅ ONLY ONE RESPONSE (no duplicate spam)
       ws.send(JSON.stringify({
         type: "username_changed",
         oldName,
         newName
       }));
 
-      // ✅ ONLY ONE BROADCAST
       broadcastSystem(`${oldName} is now ${newName}`);
       broadcastOnline();
 
       return;
     }
 
-    // ===== DM REQUEST (NEW FEATURE READY) =====
+    // ===== DM REQUEST =====
     if (data.type === "dm_request") {
+      const now = Date.now();
+
+      // 🔥 anti spam
+      if (now - ws.lastDM < 2000) return;
+      ws.lastDM = now;
+
       const target = data.to;
+      if (!target) return;
 
       wss.clients.forEach(c => {
         if (
